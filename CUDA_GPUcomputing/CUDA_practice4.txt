@@ -1,0 +1,73 @@
+%%cu
+
+#include <stdio.h>
+#include <stdlib.h>
+
+__global__ void MatrixMulKernel(int *c, int *a, int *b, int wid) {
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if(x < wid && y < wid) {
+      for(int i = 0; i < wid; ++i) {
+          c[y * wid + x] += a[y * wid +i] * b[i * wid + x];
+      }
+    }
+}
+ 
+
+__host__ int main() {
+    const int WIDTH = 16;
+    const int TILE_WIDTH = 8;
+
+    int arrA[WIDTH][WIDTH];
+    int arrB[WIDTH][WIDTH];
+    int arrC[WIDTH][WIDTH];
+
+    for(int i = 0; i < WIDTH; i++){  
+        for(int j = 0; j< WIDTH; j++) {
+            arrA[i][j] = (1 + i + j) % 10;
+            printf(" %d ", arrA[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n\n");
+    for(int i = 0; i < WIDTH; i++){
+        for(int j = 0; j < WIDTH; j++){
+            arrB[i][j] = (1 + i * j) % 10;
+            printf(" %d ", arrB[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n\n");
+
+    int *dev_a = 0;
+    int *dev_b = 0;
+    int *dev_c = 0;
+
+    cudaMalloc((void**)&dev_c, WIDTH * WIDTH * sizeof(int));
+    cudaMalloc((void**)&dev_a, WIDTH * WIDTH * sizeof(int));
+    cudaMalloc((void**)&dev_b, WIDTH * WIDTH * sizeof(int));
+
+    cudaMemcpy(dev_a, arrA, WIDTH * WIDTH * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, arrB, WIDTH * WIDTH * sizeof(int), cudaMemcpyHostToDevice);
+    
+    dim3 dimGrid(WIDTH / TILE_WIDTH, WIDTH / TILE_WIDTH, 1);
+    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH, 1);
+
+    MatrixMulKernel <<< dimGrid, dimBlock >>> (dev_c, dev_a, dev_b, WIDTH);
+
+    cudaMemcpy(arrC, dev_c, WIDTH * WIDTH * sizeof(int), cudaMemcpyDeviceToHost);
+
+    for(int i = 0; i < WIDTH; i++) {
+        for(int j = 0; j< WIDTH; j++) {
+            printf(" %d ", arrC[i][j]);
+        }
+        printf("\n");
+    }
+
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cudaFree(dev_c);
+
+    return 0;      
+}
